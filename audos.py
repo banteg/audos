@@ -16,7 +16,7 @@ python audos.py [video] [music]
 It is presumed that video has mono sound and audio has stereo sound
 '''
 
-SEARCH_WINDOW = 10  # seconds
+SEARCH_WINDOW = 30  # seconds
 
 
 def silence(samples):
@@ -47,6 +47,8 @@ def autocorrelation(signal_a, signal_b, samples):
     cci = [(v, i) for i, v in enumerate(cc)]
     result = max(cci)[1]
 
+    write('tmp_cc.wav', 44100, cc)
+
     return result
 
 
@@ -54,7 +56,8 @@ def sync(data, samples, length):
 
     if samples < 0:
         # cut off data
-        data = data[samples:]
+        print('cut left', samples)
+        data = data[-samples:]
     else:
         # pad left with silence
         print('pad left', samples)
@@ -87,7 +90,15 @@ def main():
     _, adata = read('tmp_audio.wav')
     _, hqdata = read('tmp_audio_hq.wav')
 
-    adjust = autocorrelation(vdata, adata, 44100 * SEARCH_WINDOW)
+    adjust_plus = autocorrelation(vdata, adata, 44100 * SEARCH_WINDOW)
+    adjust_minus = autocorrelation(adata, vdata, 44100 * SEARCH_WINDOW)
+
+    if adjust_minus < adjust_plus:
+        adjust = -adjust_minus
+    else:
+        adjust = adjust_plus
+
+    print('adjust {} frames ({}s)'.format(adjust, adjust/44100))
     sync(hqdata, adjust, len(vdata))
 
     print('encoding aac')
@@ -95,7 +106,8 @@ def main():
     mux(video, 'tmp_audio_hq_sync.m4a', '{}_audos.mp4'.format(video))
 
     for i in glob('tmp_*'):
-        os.unlink(i)
+        # os.unlink(i)
+        pass
 
 
 if __name__ == '__main__':
