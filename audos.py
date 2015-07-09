@@ -36,7 +36,7 @@ def mux(video, audio, output):
 
 
 def autocorrelation(signal_a, signal_b, samples):
-    print('compute autocorrelation')
+    print('compute positive autocorrelation')
     x = signal_a[:samples]
     y = signal_b[:samples]
 
@@ -45,33 +45,45 @@ def autocorrelation(signal_a, signal_b, samples):
 
     cc = irfft(x * y)
     cci = [(v, i) for i, v in enumerate(cc)]
-    result = max(cci)[1]
+    positive = max(cci)[1]
 
-    write('tmp_cc.wav', 44100, cc)
+    write('tmp_cc_plus.wav', 44100, cc)
 
-    return result
+    print('compute negative autocorrelation')
+    x = signal_b[:samples]
+    y = signal_a[:samples]
+
+    x = rfft(x)
+    y = rfft(y[::-1])
+
+    cc = irfft(x * y)
+    cci = [(v, i) for i, v in enumerate(cc)]
+    negative = max(cci)[1]
+
+    write('tmp_cc_minus.wav', 44100, cc)
+
+    if negative < positive:
+        return -negative
+
+    return positive
 
 
 def sync(data, samples, length):
 
     if samples < 0:
-        # cut off data
-        print('cut left', samples)
+        print('cut left {:0.5f}s'.format(-samples / 44100))
         data = data[-samples:]
     else:
-        # pad left with silence
-        print('pad left', samples)
+        print('pad left {:0.5f}s'.format(samples / 44100))
         lpad = silence(samples)
         data = np.vstack([lpad, data])
 
     rdif = length - len(data)
     if rdif > 0:
-        # pad right with silence
-        print('pad right', rdif)
+        print('pad right {:0.5f}s'.format(rdif / 44100))
         rpad = silence(rdif)
         data = np.vstack([data, rpad])
     else:
-        # cut right to fit
         print('cut right')
         data = data[:length]
 
@@ -90,15 +102,9 @@ def main():
     _, adata = read('tmp_audio.wav')
     _, hqdata = read('tmp_audio_hq.wav')
 
-    adjust_plus = autocorrelation(vdata, adata, 44100 * SEARCH_WINDOW)
-    adjust_minus = autocorrelation(adata, vdata, 44100 * SEARCH_WINDOW)
+    adjust = autocorrelation(vdata, adata, 44100 * SEARCH_WINDOW)
 
-    if adjust_minus < adjust_plus:
-        adjust = -adjust_minus
-    else:
-        adjust = adjust_plus
-
-    print('adjust {} frames ({}s)'.format(adjust, adjust/44100))
+    print('adjust {:0.5f}s ({} frames)'.format(adjust / 44100, adjust))
     sync(hqdata, adjust, len(vdata))
 
     print('encoding aac')
