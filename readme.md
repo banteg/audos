@@ -1,5 +1,7 @@
 # audos
 
+![waveform](https://cloud.githubusercontent.com/assets/4562643/8623417/27ec4eb4-2753-11e5-906a-61f1dca4145b.png)
+
 Replace recorded sound in video with its higher quality version.
 
 ```
