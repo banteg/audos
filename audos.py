@@ -33,37 +33,22 @@ def mux(video, audio, output):
     call(cmd)
 
 
+def xcorr(x, y):
+    return irfft(rfft(x) * rfft(y[::-1]))
+
+
 def autocorrelation(signal_a, signal_b, samples):
-    print('compute positive autocorrelation')
+    print('compute cross-correlation')
     x = signal_a[:samples]
     y = signal_b[:samples]
 
-    x = rfft(x)
-    y = rfft(y[::-1])
+    right = np.argmax(xcorr(x, y))
+    left = np.argmax(xcorr(y, x))
 
-    cc = irfft(x * y)
-    cci = [(v, i) for i, v in enumerate(cc)]
-    positive = max(cci)[1]
-
-    write('tmp_cc_plus.wav', 44100, cc)
-
-    print('compute negative autocorrelation')
-    x = signal_b[:samples]
-    y = signal_a[:samples]
-
-    x = rfft(x)
-    y = rfft(y[::-1])
-
-    cc = irfft(x * y)
-    cci = [(v, i) for i, v in enumerate(cc)]
-    negative = max(cci)[1]
-
-    write('tmp_cc_minus.wav', 44100, cc)
-
-    if negative < positive:
-        return -negative
-
-    return positive
+    # why?
+    if left < right:
+        return -left
+    return right
 
 
 def sync(data, samples, length):
