@@ -1,16 +1,16 @@
 # audos
 
-Sync HQ sound to recorded sound in video.
+Replace recorded sound in video with its higher quality version.
+
+```
+audos video.mov audio.flac
+```
 
 ## Installation
 
 You need Python 3, numpy, scipy, ffmpeg and qaac. Should work on any platform.
 
-## Usage
-
-Specify source video and audio you'd like to use (any format) and
-a few moments later you'll get a new .mp4 file with synced audio.
-
 ```
-audos video.mov audio.mp3
+git clone https://github.com/banteg/audos
+pip install -U -e audos
 ```

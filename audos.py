@@ -11,9 +11,7 @@ Audos Sync
 Sync HQ sound to recorded sound in video.
 
 Usage:
-python audos.py [video] [music]
-
-It is presumed that video has mono sound and audio has stereo sound
+  audos [video] [music]
 '''
 
 SEARCH_WINDOW = 30  # seconds
