@@ -28,6 +28,7 @@ def mux(video, audio, output):
 
 def estimate_delay(signal_a, signal_b, samples):
     print('compute cross-correlation')
+    samples = min(samples, len(signal_a), len(signal_b))
     x = signal_a[:samples]
     y = signal_b[:samples]
 
