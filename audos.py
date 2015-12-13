@@ -1,89 +1,102 @@
-from scipy.io.wavfile import read, write
-from numpy.fft import rfft, irfft
-from subprocess import call
-import numpy as np
-import sys
-from glob import glob
 import os
+import warnings
+from glob import glob
+from subprocess import call
+
+import click
+import numpy as np
+from numpy.fft import rfft, irfft
+from scipy.io.wavfile import read, write
 
 
-SEARCH_WINDOW = 30  # seconds, twice the maximum delay/rush
+FFMPEG_EXTRACT_WAV = 'ffmpeg -loglevel panic -y -i "{i}" -ar {ar} "{o}"'
+FFMPEG_MUX = 'ffmpeg -loglevel panic -y -i "{i[0]}" -i "{i[1]}" -c copy -map 0:0 -map 1 "{o}"'
+QAAC_ENCODE = 'qaac -s -v256 --no-delay {i}'
+
+
+def estimate_delay(a, b, rate, window=np.infty):
+    a = np.mean(a, axis=1)
+    b = np.mean(b, axis=1)
+
+    samples = min(len(a), len(b), window * rate)
+
+    a = a[:samples]
+    b = b[:samples]
+
+    xcorr = irfft(rfft(a) * rfft(b[::-1]))
+    delay = np.argmax(xcorr)
+
+    if delay > samples / 2:
+        return delay - samples
+
+    return delay
 
 
 def silence(samples):
     return np.zeros((samples, 2), dtype=np.int16)
 
 
-def extract_wav(in_name, out_name, channels=1):
-    print('extract wav: {}'.format(in_name))
-    cmd = 'ffmpeg -loglevel panic -y -i "{}" -ac {} -ar 44100 "{}"'.format(in_name, channels, out_name)
-    call(cmd)
-
-
-def mux(video, audio, output):
-    print('mux to superfile')
-    cmd = 'ffmpeg -loglevel panic -y -i "{}" -i "{}" -c copy -map 0:0 -map 1 "{}"'.format(video, audio, output)
-    call(cmd)
-
-
-def estimate_delay(signal_a, signal_b, samples):
-    print('compute cross-correlation')
-    samples = min(samples, len(signal_a), len(signal_b))
-    x = signal_a[:samples]
-    y = signal_b[:samples]
-
-    xcorr = irfft(rfft(x) * rfft(y[::-1]))
-    delay = np.argmax(xcorr)
-
-    if delay > samples / 2:
-        return delay - samples
-    return delay
-
-
-def sync(data, samples, length):
-    if samples < 0:
-        print('cut left {:0.5f}s'.format(-samples / 44100))
-        data = data[-samples:]
+def sync(data, adjust, rate, length):
+    if adjust < 0:
+        # cut left
+        data = data[-adjust:]
     else:
-        print('pad left {:0.5f}s'.format(samples / 44100))
-        lpad = silence(samples)
+        # pad left
+        lpad = silence(adjust)
         data = np.vstack([lpad, data])
 
     rdif = length - len(data)
-    if rdif > 0:
-        print('pad right {:0.5f}s'.format(rdif / 44100))
+
+    if rdif < 0:
+        # cut right
+        data = data[:length]
+    else:
+        # pad right
         rpad = silence(rdif)
         data = np.vstack([data, rpad])
-    else:
-        print('cut right')
-        data = data[:length]
 
-    write('tmp_audio_hq_sync.wav', 44100, data)
+    write('tmp_sync.wav', rate, data)
 
 
-def main():
-    print('Audos/dev is performing magic.')
-    _, video, audio = sys.argv
+@click.command()
+@click.argument('video', type=click.Path(exists=True, dir_okay=False))
+@click.argument('audio', type=click.Path(exists=True, dir_okay=False))
+@click.option('rate', '-r', '--rate', default=44100, help='Sample rate (samples/second)')
+@click.option('window', '-w', '--window', default=30, help='Search window (seconds)')
+def main(video, audio, rate, window):
+    warnings.filterwarnings("ignore")
 
-    extract_wav(video, 'tmp_video.wav')
-    extract_wav(audio, 'tmp_audio.wav')
-    extract_wav(audio, 'tmp_audio_hq.wav', 2)
+    click.secho('Audos is performing magic.', fg='yellow')
+    click.echo('video={}  audio={}  rate={}  window={}\n'.format(video, audio, rate, window))
 
-    _, vdata = read('tmp_video.wav')
-    _, adata = read('tmp_audio.wav')
-    _, hqdata = read('tmp_audio_hq.wav')
+    click.echo('Extracting waveform from video')
+    call(FFMPEG_EXTRACT_WAV.format(i=video, ar=rate, o='tmp_video.wav'))
 
-    adjust = estimate_delay(vdata, adata, 44100 * SEARCH_WINDOW)
+    click.echo('Extracting waveform from audio\n')
+    call(FFMPEG_EXTRACT_WAV.format(i=audio, ar=rate, o='tmp_audio.wav'))
 
-    print('adjust {:0.5f}s ({} frames)'.format(adjust / 44100, adjust))
-    sync(hqdata, adjust, len(vdata))
+    click.echo('Loading video waveform')
+    sr, video_wave = read('tmp_video.wav')
 
-    print('encoding aac')
-    call('qaac -s -v256 --no-delay tmp_audio_hq_sync.wav')
-    mux(video, 'tmp_audio_hq_sync.m4a', '{}_audos.mp4'.format(video))
+    click.echo('Loading audio waveform\n')
+    sr, audio_wave = read('tmp_audio.wav')
+
+    click.echo('Estimating sync')
+    adjust = estimate_delay(video_wave, audio_wave, window, rate)
+
+    click.secho('Adjusting {:0.5f}s ({} frames)\n'.format(adjust / rate, adjust), fg='green')
+    sync(audio_wave, adjust, rate, len(video_wave))
+
+    click.echo('Encoding audio')
+    call(QAAC_ENCODE.format(i='tmp_sync.wav'))
+
+    click.echo('Muxing it all together')
+    call(FFMPEG_MUX.format(i=[video, 'tmp_sync.m4a'], o=video + ' audos.mp4'))
 
     for i in glob('tmp_*'):
         os.unlink(i)
+
+    click.echo('Done.')
 
 
 if __name__ == '__main__':
