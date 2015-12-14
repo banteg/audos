@@ -58,12 +58,18 @@ def sync(data, adjust, rate, length):
     write('tmp_sync.wav', rate, data)
 
 
+def cleanup():
+    for i in glob('tmp_*'):
+        os.unlink(i)
+
+
 @click.command()
 @click.argument('video', type=click.Path(exists=True, dir_okay=False))
 @click.argument('audio', type=click.Path(exists=True, dir_okay=False))
 @click.option('rate', '-r', '--rate', default=44100, help='Sample rate (samples/second)')
 @click.option('window', '-w', '--window', default=30, help='Search window (seconds)')
-def main(video, audio, rate, window):
+@click.option('calc', '-c', '--calc', is_flag=True, help='Calculate only')
+def main(video, audio, rate, window, calc):
     warnings.filterwarnings("ignore")
 
     click.secho('Audos is performing magic.', fg='yellow')
@@ -84,6 +90,11 @@ def main(video, audio, rate, window):
     click.echo('Estimating sync')
     adjust = estimate_delay(video_wave, audio_wave, window, rate)
 
+    if calc:
+        click.secho('Offset {:0.5f}s ({} frames)\n'.format(adjust / rate, adjust), fg='green')
+        cleanup()
+        return
+
     click.secho('Adjusting {:0.5f}s ({} frames)\n'.format(adjust / rate, adjust), fg='green')
     sync(audio_wave, adjust, rate, len(video_wave))
 
@@ -91,12 +102,12 @@ def main(video, audio, rate, window):
     call(QAAC_ENCODE.format(i='tmp_sync.wav'))
 
     click.echo('Muxing it all together')
-    call(FFMPEG_MUX.format(i=[video, 'tmp_sync.m4a'], o=video + ' audos.mp4'))
+    name = '{name}-audos.mp4'.format(name=os.path.splitext(video)[0])
+    call(FFMPEG_MUX.format(i=[video, 'tmp_sync.m4a'], o=name))
 
-    for i in glob('tmp_*'):
-        os.unlink(i)
+    cleanup()
 
-    click.echo('Done.')
+    click.secho('Saved as {name}'.format(name=name), fg='green')
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='audos',
-    version='0.2-dev',
+    version='0.3-dev',
     description='Sync sound with its recording',
     url='https://github.com/banteg/audos',
     author='banteg',
