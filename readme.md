@@ -7,7 +7,7 @@ Sync sound with its recording.
 ## Usage
 
 ```
-audos <video> <audio> [-r 44100] [-w 30]
+audos <video> <audio> [-r 44100] [-w 30] [-c]
 ```
 
 ## Options
@@ -15,6 +15,8 @@ audos <video> <audio> [-r 44100] [-w 30]
 `-r` or `--rate` sample rate in samples/second
 
 `-w` or `--window` search window in seconds
+
+`-c` or `--calc` calculate offset only
 
 ## Installation
 
