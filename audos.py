@@ -15,8 +15,10 @@ QAAC_ENCODE = 'qaac -s -v256 --no-delay {i}'
 
 
 def estimate_delay(a, b, rate, window=np.infty):
-    a = np.mean(a, axis=1)
-    b = np.mean(b, axis=1)
+    if len(a.shape) > 1:
+        a = np.mean(a, axis=1)
+    if len(b.shape) > 1:
+        b = np.mean(b, axis=1)
 
     samples = min(len(a), len(b), window * rate)
 
